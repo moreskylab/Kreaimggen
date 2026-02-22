@@ -30,7 +30,8 @@ async function authFetch(url, options = {}) {
   };
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
-    logout();
+    logout();          // redirects – nothing below this runs in practice
+    return null;
   }
   return res;
 }
@@ -112,6 +113,7 @@ async function handleGenerate(e) {
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
     });
+    if (!submitRes) return;  // redirected to login
     if (!submitRes.ok) {
       const detail = (await safeJson(submitRes)).detail || "Submission failed";
       throw new Error(detail);
@@ -134,10 +136,25 @@ async function handleGenerate(e) {
 }
 
 async function pollTask(taskId) {
+  let transientErrors = 0;
+  const MAX_TRANSIENT = 5;  // tolerate up to 5 consecutive 502/503/504s before giving up
+
   for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
     await sleep(POLL_INTERVAL_MS);
 
     const res = await authFetch(`${API_BASE}/generate/status/${taskId}`);
+    if (!res) return null;  // redirected to login
+
+    // Transient upstream errors – retry rather than abort
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      transientErrors++;
+      if (transientErrors >= MAX_TRANSIENT) {
+        throw new Error(`Server unreachable after ${MAX_TRANSIENT} retries (${res.status} ${res.statusText})`);
+      }
+      continue;
+    }
+    transientErrors = 0;  // reset on any non-transient response
+
     if (!res.ok) {
       const detail = (await safeJson(res)).detail || "Failed to check task status";
       throw new Error(detail);
