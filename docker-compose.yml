@@ -1,0 +1,159 @@
+---
+# docker-compose.yml
+# Full-stack: Frontend + Backend + Worker + Flower + RabbitMQ + Redis
+#
+# Usage:
+#   cp .env.example .env          # fill in KREA_API_KEY and SECRET_KEY
+#   docker compose up --build -d
+#   open http://localhost
+
+version: "3.9"
+
+x-app-env: &app-env
+  env_file: .env
+  environment:
+    CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
+    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    REDIS_URL: redis://redis:6379/1
+    DATABASE_URL: postgresql+asyncpg://kreaimggen:kreaimggen@postgres:5432/kreaimggen
+    DATABASE_SYNC_URL: postgresql+psycopg2://kreaimggen:kreaimggen@postgres:5432/kreaimggen
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: kreaimggen-postgres
+    <<: *restart
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kreaimggen
+      POSTGRES_PASSWORD: kreaimggen
+      POSTGRES_DB: kreaimggen
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kreaimggen -d kreaimggen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: kreaimggen-rabbitmq
+    <<: *restart
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # Management UI → http://localhost:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kreaimggen-redis
+    <<: *restart
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend API ─────────────────────────────────────────────────────────────
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kreaimggen-backend
+    <<: [*app-env, *restart]
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Celery Worker ───────────────────────────────────────────────────────────
+
+  worker:
+    build:
+      context: ./backend         # shares the same image / source
+      dockerfile: ../worker/Dockerfile
+    container_name: kreaimggen-worker
+    <<: [*app-env, *restart]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+    environment:
+      CELERYD_CONCURRENCY: "4"
+
+  # ── Flower (Celery monitoring UI) ───────────────────────────────────────────
+
+  flower:
+    image: mher/flower:2.0
+    container_name: kreaimggen-flower
+    <<: *restart
+    command:
+      - celery
+      - --broker=amqp://guest:guest@rabbitmq:5672//
+      - flower
+      - --port=5555
+      - --persistent=true
+      - --db=/data/flower.db
+    ports:
+      - "5555:5555"
+    volumes:
+      - flower_data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # ── Frontend (Nginx + Bootstrap 5) ─────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kreaimggen-frontend
+    <<: *restart
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  rabbitmq_data:
+  redis_data:
+  flower_data:
+  postgres_data:
+
+networks:
+  default:
+    name: kreaimggen-net

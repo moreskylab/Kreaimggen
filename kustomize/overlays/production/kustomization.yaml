@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kreaimggen-prod
+
+bases:
+  - ../../base
+
+# ── Production-specific patches ──────────────────────────────────────────────
+
+patches:
+  # Scale up the backend
+  - path: patches/backend-replica-patch.yaml
+    target:
+      kind: Deployment
+      name: .*-backend
+
+  # Scale up workers
+  - path: patches/worker-replica-patch.yaml
+    target:
+      kind: Deployment
+      name: .*-worker
+
+  # Resource guarantees for prod
+  - path: patches/resource-patch.yaml
+
+# ── Image overrides (point to your production registry) ─────────────────────
+
+images:
+  - name: kreaimggen-backend
+    newName: ghcr.io/yourorg/kreaimggen-backend
+    newTag: v1.0.0
+  - name: kreaimggen-worker
+    newName: ghcr.io/yourorg/kreaimggen-worker
+    newTag: v1.0.0
+  - name: kreaimggen-frontend
+    newName: ghcr.io/yourorg/kreaimggen-frontend
+    newTag: v1.0.0
+
+# ── Config map generator: production .env override ──────────────────────────
+configMapGenerator:
+  - name: kreaimggen-prod-config
+    literals:
+      - DEBUG=false
+      - RATE_LIMIT_PER_MINUTE=50
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# ── Secret generator (use ExternalSecrets in real prod) ─────────────────────
+# secretGenerator:
+#   - name: kreaimggen-app-secret
+#     files:
+#       - secret-key=secrets/secret.key
+#       - krea-api-key=secrets/krea.key
+
+commonLabels:
+  environment: production

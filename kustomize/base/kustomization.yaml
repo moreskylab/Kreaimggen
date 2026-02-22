@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: kreaimggen
+
+# Include all Helm-rendered manifests (run: helm template kreaimggen ./helm/kreaimggen > base/all.yaml)
+resources:
+  - all.yaml
+
+# Optional: common labels applied to every resource
+commonLabels:
+  app.kubernetes.io/part-of: kreaimggen
+  managed-by: kustomize
+
+# Optional: namespace creation
+# - namespace.yaml

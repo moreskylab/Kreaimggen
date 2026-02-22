@@ -1,0 +1,53 @@
+{{- if .Values.flower.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kreaimggen.fullname" . }}-flower
+  labels:
+    {{- include "kreaimggen.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+spec:
+  replicas: {{ .Values.flower.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kreaimggen.name" . }}
+      app.kubernetes.io/component: flower
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kreaimggen.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: flower
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: flower
+          image: "{{ .Values.flower.image.repository }}:{{ .Values.flower.image.tag }}"
+          imagePullPolicy: {{ .Values.flower.image.pullPolicy }}
+          command:
+            - celery
+            - --broker=$(CELERY_BROKER_URL)
+            - flower
+            - --port=5555
+            - --persistent=true
+            - --db=/data/flower.db
+          ports:
+            - containerPort: 5555
+              name: http
+          env:
+            {{- include "kreaimggen.brokerEnv" . | nindent 12 }}
+          volumeMounts:
+            - name: flower-data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: 5555
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.flower.resources | nindent 12 }}
+      volumes:
+        - name: flower-data
+          emptyDir: {}
+{{- end }}

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: kreaimggen
+description: >
+  Production Helm chart for KreaImgGen –
+  FastAPI backend, Celery workers, Flower, Redis, and Nginx frontend.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - fastapi
+  - celery
+  - krea-ai
+  - image-generation
+maintainers:
+  - name: DevOps Team
+    email: devops@example.com
