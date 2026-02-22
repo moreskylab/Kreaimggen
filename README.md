@@ -15,14 +15,14 @@ Browser  ──►  Nginx (frontend)
                 └──────────────  Redis (results)  ◄─────┘
 ```
 
-| Component | Technology |
-|-----------|------------|
-| Frontend  | Nginx 1.27, Bootstrap 5, Vanilla JS |
-| Backend   | FastAPI 0.111, SlowAPI rate-limiting, JWT (python-jose) |
-| Worker    | Celery 5.3, RabbitMQ 3.13 (broker), Redis 7 (backend) |
-| AI        | Krea AI REST API (async prediction polling) |
-| Monitoring| Flower, Fluentd → Elasticsearch, Grafana dashboard |
-| Infra     | Docker Compose (dev) · Helm chart (prod) · Kustomize overlay |
+| Component  | Technology                                                   |
+| ---------- | ------------------------------------------------------------ |
+| Frontend   | Nginx 1.27, Bootstrap 5, Vanilla JS                          |
+| Backend    | FastAPI 0.111, SlowAPI rate-limiting, JWT (python-jose)      |
+| Worker     | Celery 5.3, RabbitMQ 3.13 (broker), Redis 7 (backend)        |
+| AI         | Krea AI REST API (async prediction polling)                  |
+| Monitoring | Flower, Fluentd → Elasticsearch, Grafana dashboard           |
+| Infra      | Docker Compose (dev) · Helm chart (prod) · Kustomize overlay |
 
 ---
 
@@ -123,13 +123,13 @@ kubectl apply -k kustomize/overlays/production
 
 ## API Reference
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/api/v1/auth/register` | — | Create user |
-| `POST` | `/api/v1/auth/token` | — | Login → JWT |
-| `POST` | `/api/v1/generate` | Bearer | Queue image generation |
+| Method | Path                           | Auth   | Description                |
+| ------ | ------------------------------ | ------ | -------------------------- |
+| `POST` | `/api/v1/auth/register`        | —      | Create user                |
+| `POST` | `/api/v1/auth/token`           | —      | Login → JWT                |
+| `POST` | `/api/v1/generate`             | Bearer | Queue image generation     |
 | `GET`  | `/api/v1/generate/status/{id}` | Bearer | Poll task / get image URLs |
-| `GET`  | `/healthz` | — | Liveness probe |
+| `GET`  | `/healthz`                     | —      | Liveness probe             |
 
 ---
 
@@ -143,16 +143,16 @@ kubectl apply -k kustomize/overlays/production
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | *(required)* | JWT signing key (`openssl rand -hex 32`) |
-| `KREA_API_KEY` | *(required)* | Krea AI API key |
-| `KREA_API_BASE_URL` | `https://api.krea.ai/v1` | Krea AI endpoint |
-| `CELERY_BROKER_URL` | `amqp://guest:guest@rabbitmq:5672//` | RabbitMQ |
-| `CELERY_RESULT_BACKEND` | `redis://redis:6379/0` | Redis results |
-| `REDIS_URL` | `redis://redis:6379/1` | Redis rate-limit state |
-| `RATE_LIMIT_PER_MINUTE` | `20` | Requests per IP per minute |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | JWT lifetime |
+| Variable                      | Default                              | Description                              |
+| ----------------------------- | ------------------------------------ | ---------------------------------------- |
+| `SECRET_KEY`                  | *(required)*                         | JWT signing key (`openssl rand -hex 32`) |
+| `KREA_API_KEY`                | *(required)*                         | Krea AI API key                          |
+| `KREA_API_BASE_URL`           | `https://api.krea.ai/v1`             | Krea AI endpoint                         |
+| `CELERY_BROKER_URL`           | `amqp://guest:guest@rabbitmq:5672//` | RabbitMQ                                 |
+| `CELERY_RESULT_BACKEND`       | `redis://redis:6379/0`               | Redis results                            |
+| `REDIS_URL`                   | `redis://redis:6379/1`               | Redis rate-limit state                   |
+| `RATE_LIMIT_PER_MINUTE`       | `20`                                 | Requests per IP per minute               |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60`                                 | JWT lifetime                             |
 
 ---
 
