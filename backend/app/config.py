@@ -22,7 +22,8 @@ class Settings(BaseSettings):
 
     # Krea AI
     KREA_API_KEY: str = ""
-    KREA_API_BASE_URL: str = "https://api.krea.ai/v1"
+    KREA_API_BASE_URL: str = "https://api.krea.ai"
+    KREA_MODEL: str = "bfl/flux-1-dev"  # override via env: e.g. bfl/flux-1-schnell
 
     # Redis (for rate limiting state)
     REDIS_URL: str = "redis://redis:6379/1"

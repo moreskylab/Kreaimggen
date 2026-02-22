@@ -40,20 +40,19 @@ class KreaBaseTask(Task):
 # Helper: poll Krea AI for a completed generation
 # ---------------------------------------------------------------------------
 
-def _poll_for_result(client: httpx.Client, prediction_id: str, max_wait: int = 300) -> dict:
-    """Poll the Krea AI async prediction endpoint until done or timeout."""
+def _poll_for_result(client: httpx.Client, job_id: str, max_wait: int = 300) -> dict:
+    """Poll the Krea AI /jobs/{job_id} endpoint until completed or timeout."""
     deadline = time.monotonic() + max_wait
     while time.monotonic() < deadline:
-        resp = client.get(f"/predictions/{prediction_id}")
+        resp = client.get(f"/jobs/{job_id}")
         resp.raise_for_status()
         data = resp.json()
-        state: str = data.get("status", "")
-        if state == "succeeded":
-            return data
-        if state in {"failed", "canceled"}:
-            raise RuntimeError(f"Krea AI prediction {prediction_id} ended with state: {state}")
-        time.sleep(3)
-    raise TimeoutError(f"Krea AI prediction {prediction_id} did not finish within {max_wait}s")
+        if data.get("completed_at"):
+            if data.get("status") == "completed":
+                return data
+            raise RuntimeError(f"Krea AI job {job_id} ended with status: {data.get('status')}")
+        time.sleep(2)
+    raise TimeoutError(f"Krea AI job {job_id} did not finish within {max_wait}s")
 
 
 # ---------------------------------------------------------------------------
@@ -82,47 +81,45 @@ def generate_image(
     """
     Submit an image-generation job to Krea AI and return the result URLs.
 
-    Krea AI uses an async prediction model:
-      1. POST /predictions  → returns { id, status: "starting" }
-      2. Poll GET /predictions/{id} until status == "succeeded"
+    Krea AI uses an async job model:
+      1. POST /generate/image/{model}  → returns { job_id, status: "queued" }
+      2. Poll GET /jobs/{job_id} until completed_at is set and status == "completed"
     """
     logger.info("Starting image generation | user=%s prompt=%.80s", user, prompt)
 
     payload: dict[str, Any] = {
-        "model": "krea-sd-xl",          # adjust to the exact model slug you have access to
-        "input": {
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "num_inference_steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-        },
+        "prompt": prompt,
+        "width": width,
+        "height": height,
+        "steps": num_inference_steps,
+        "guidance_scale": guidance_scale,
     }
     if negative_prompt:
-        payload["input"]["negative_prompt"] = negative_prompt
+        payload["negative_prompt"] = negative_prompt
 
     try:
         # ── Step 1: submit ──────────────────────────────────────────────────
-        submit_resp = self.client.post("/predictions", json=payload)
+        endpoint = f"/generate/image/{settings.KREA_MODEL}"
+        submit_resp = self.client.post(endpoint, json=payload)
         submit_resp.raise_for_status()
-        prediction = submit_resp.json()
-        prediction_id: str = prediction["id"]
-        logger.info("Prediction submitted | id=%s", prediction_id)
+        job = submit_resp.json()
+        job_id: str = job["job_id"]
+        logger.info("Job submitted | id=%s", job_id)
 
         # Update Celery task state so callers can track progress
         self.update_state(
             state="PROGRESS",
-            meta={"prediction_id": prediction_id, "status": "submitted"},
+            meta={"job_id": job_id, "status": "submitted"},
         )
 
         # ── Step 2: poll ────────────────────────────────────────────────────
-        result = _poll_for_result(self.client, prediction_id)
+        result = _poll_for_result(self.client, job_id)
 
-        output_urls: list[str] = result.get("output", [])
-        logger.info("Generation succeeded | id=%s urls=%s", prediction_id, output_urls)
+        output_urls: list[str] = result.get("result", {}).get("urls", [])
+        logger.info("Generation succeeded | id=%s urls=%s", job_id, output_urls)
 
         return {
-            "prediction_id": prediction_id,
+            "job_id": job_id,
             "image_urls": output_urls,
             "prompt": prompt,
             "user": user,
