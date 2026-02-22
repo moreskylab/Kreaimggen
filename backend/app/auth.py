@@ -1,3 +1,5 @@
+import base64
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -19,12 +21,20 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/token")
 
 
+def _prehash(password: str) -> str:
+    """SHA-256 pre-hash so bcrypt's 72-byte hard limit is never reached.
+    The digest is base64-encoded to stay within safe ASCII bcrypt input.
+    """
+    digest = hashlib.sha256(password.encode("utf-8")).digest()
+    return base64.b64encode(digest).decode("ascii")
+
+
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(_prehash(plain), hashed)
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_prehash(password))
 
 
 async def authenticate_user(
