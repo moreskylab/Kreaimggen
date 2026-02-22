@@ -113,10 +113,10 @@ async function handleGenerate(e) {
       body:    JSON.stringify(payload),
     });
     if (!submitRes.ok) {
-      const detail = (await submitRes.json()).detail || "Submission failed";
+      const detail = (await safeJson(submitRes)).detail || "Submission failed";
       throw new Error(detail);
     }
-    const { task_id } = await submitRes.json();
+    const { task_id } = await safeJson(submitRes);
 
     // ── Poll for result ──────────────────────────────────────────────────────
     spinnerMsg.textContent = "Generating image… (this may take up to 2 minutes)";
@@ -138,9 +138,12 @@ async function pollTask(taskId) {
     await sleep(POLL_INTERVAL_MS);
 
     const res = await authFetch(`${API_BASE}/generate/status/${taskId}`);
-    if (!res.ok) throw new Error("Failed to check task status");
+    if (!res.ok) {
+      const detail = (await safeJson(res)).detail || "Failed to check task status";
+      throw new Error(detail);
+    }
 
-    const data = await res.json();
+    const data = await safeJson(res);
 
     if (data.status === "success") {
       const urls = data.result?.image_urls;
@@ -157,4 +160,16 @@ async function pollTask(taskId) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Safely parse JSON from a Response. Falls back to HTTP status text when the
+ * body is not valid JSON (e.g. nginx 502/504 HTML error pages).
+ */
+async function safeJson(res) {
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try { return await res.json(); } catch { /* fall through */ }
+  }
+  return { detail: `${res.status} ${res.statusText}` };
 }
