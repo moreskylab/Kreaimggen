@@ -7,7 +7,7 @@
 #   docker compose up --build -d
 #   open http://localhost
 
-version: "3.9"
+# version: "3.9"
 
 x-app-env: &app-env
   env_file:
@@ -81,7 +81,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: kreaimggen-backend
+    # container_name: kreaimggen-backend
     <<: [*app-env, *restart]
     ports:
       - "8000:8000"
@@ -104,7 +104,7 @@ services:
     build:
       context: ./backend         # shares the same image / source
       dockerfile: ../worker/Dockerfile
-    container_name: kreaimggen-worker
+    # container_name: kreaimggen-worker
     <<: [*app-env, *restart]
     depends_on:
       rabbitmq:
