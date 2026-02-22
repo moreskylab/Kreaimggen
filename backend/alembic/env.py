@@ -2,6 +2,7 @@
 Alembic env.py – async-compatible with SQLAlchemy asyncio engine.
 """
 import asyncio
+import re
 from logging.config import fileConfig
 
 from alembic import context
@@ -19,9 +20,11 @@ settings = get_settings()
 # Alembic Config object – gives access to values in alembic.ini
 config = context.config
 
-# Override sqlalchemy.url from application settings
-# async_engine_from_config requires an async driver (asyncpg), not psycopg2
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url from application settings.
+# Normalise to asyncpg so async_engine_from_config always gets an async driver,
+# regardless of whether DATABASE_URL was set with psycopg2 or a bare schema.
+_async_url = re.sub(r"^postgres(?:ql)?(\+\w+)?://", "postgresql+asyncpg://", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", _async_url)
 
 # Logging config from alembic.ini
 if config.config_file_name is not None:
